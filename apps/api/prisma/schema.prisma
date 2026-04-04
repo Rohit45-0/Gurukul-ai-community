@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlatformRole {
+  teacher
+  platform_admin
+}
+
+enum OrganizationRole {
+  teacher
+  org_admin
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+enum VisibilityScope {
+  organization
+  global_public
+}
+
+enum NotificationType {
+  invite_created
+  invite_accepted
+  reply
+  reaction
+  mention
+  moderation_update
+  group_publicized
+}
+
+enum ReportTargetType {
+  group
+  post
+  comment
+}
+
+enum ReportStatus {
+  open
+  resolved
+  dismissed
+  escalated
+}
+
+enum ModerationActionType {
+  hide
+  unhide
+  delete
+  lock
+  unlock
+  archive
+  restore
+  dismiss
+  escalate
+}
+
+enum AuditTargetType {
+  invite
+  group
+  post
+  comment
+  report
+  attachment
+  user
+}
+
+model Organization {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  memberships Membership[]
+  invites     Invite[]
+  homeUsers   User[]     @relation("HomeOrganization")
+  ownedGroups Group[]    @relation("OwnerOrganization")
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id                       String            @id @default(cuid())
+  email                    String            @unique
+  name                     String
+  handle                   String            @unique
+  platformRole             PlatformRole      @default(teacher)
+  homeOrganizationId       String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  homeOrganization         Organization?     @relation("HomeOrganization", fields: [homeOrganizationId], references: [id], onDelete: SetNull)
+  membership               Membership?
+  createdInvites           Invite[]          @relation("InviteCreator")
+  createdGroups            Group[]           @relation("GroupCreator")
+  groupMemberships         GroupMembership[]
+  posts                    Post[]
+  comments                 Comment[]
+  uploadedAttachments      Attachment[]      @relation("UploadedAttachments")
+  reactions                Reaction[]
+  bookmarks                Bookmark[]
+  receivedNotifications    Notification[]    @relation("NotificationRecipient")
+  actorNotifications       Notification[]    @relation("NotificationActor")
+  createdReports           Report[]          @relation("ReportCreator")
+  resolvedReports          Report[]          @relation("ReportResolver")
+  auditLogs                AuditLog[]        @relation("AuditActor")
+  otpCodes                 AuthOtp[]
+  moderatedReports         ModerationAction[]
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String           @unique
+  role           OrganizationRole @default(teacher)
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Invite {
+  id              String           @id @default(cuid())
+  email           String
+  organizationId  String
+  createdByUserId String
+  role            OrganizationRole @default(teacher)
+  token           String           @unique
+  status          InviteStatus     @default(pending)
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser   User             @relation("InviteCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([email, organizationId])
+}
+
+model AuthOtp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+}
+
+model Group {
+  id                  String           @id @default(cuid())
+  name                String
+  slug                String
+  description         String
+  ownerOrganizationId String
+  createdByUserId     String
+  visibilityScope     VisibilityScope  @default(organization)
+  isLocked            Boolean          @default(false)
+  isArchived          Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  ownerOrganization   Organization     @relation("OwnerOrganization", fields: [ownerOrganizationId], references: [id], onDelete: Cascade)
+  createdByUser       User             @relation("GroupCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  memberships         GroupMembership[]
+  posts               Post[]
+  reports             Report[]
+  notifications       Notification[]
+  moderationActions   ModerationAction[]
+
+  @@unique([ownerOrganizationId, slug])
+  @@index([visibilityScope])
+  @@index([ownerOrganizationId, visibilityScope])
+}
+
+model GroupMembership {
+  id       String   @id @default(cuid())
+  groupId   String
+  userId    String
+  joinedAt  DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model Post {
+  id                String             @id @default(cuid())
+  groupId           String
+  authorId          String
+  title             String
+  body              String
+  isHidden          Boolean            @default(false)
+  deletedAt         DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  group             Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author            User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  attachments       Attachment[]
+  comments          Comment[]
+  reactions         Reaction[]
+  bookmarks         Bookmark[]
+  reports           Report[]
+  notifications     Notification[]
+  moderationActions ModerationAction[]
+
+  @@index([groupId, createdAt])
+}
+
+model Comment {
+  id                String             @id @default(cuid())
+  postId            String
+  authorId          String
+  body              String
+  parentCommentId   String?
+  isHidden          Boolean            @default(false)
+  deletedAt         DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  post              Post               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author            User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment     Comment?           @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies           Comment[]          @relation("CommentReplies")
+  reactions         Reaction[]
+  reports           Report[]
+  notifications     Notification[]
+  moderationActions ModerationAction[]
+
+  @@index([postId, createdAt])
+}
+
+model Attachment {
+  id               String         @id @default(cuid())
+  postId           String?
+  uploadedByUserId String
+  fileName         String
+  mimeType         String
+  size             Int
+  storageKey       String
+  createdAt        DateTime       @default(now())
+  post             Post?          @relation(fields: [postId], references: [id], onDelete: SetNull)
+  uploadedByUser   User           @relation("UploadedAttachments", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+  notifications    Notification[]
+
+  @@index([uploadedByUserId, createdAt])
+}
+
+model Reaction {
+  id         String    @id @default(cuid())
+  userId     String
+  emoji      String
+  postId     String?
+  commentId  String?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post       Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId, emoji])
+  @@unique([userId, commentId, emoji])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Notification {
+  id           String           @id @default(cuid())
+  recipientId  String
+  actorId      String?
+  groupId      String?
+  postId       String?
+  commentId    String?
+  attachmentId String?
+  type         NotificationType
+  title        String
+  message      String
+  payload      Json?
+  readAt       DateTime?
+  createdAt    DateTime         @default(now())
+  recipient    User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor        User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  group        Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  post         Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  comment      Comment?         @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  attachment   Attachment?      @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, createdAt])
+}
+
+model Report {
+  id                String           @id @default(cuid())
+  reporterId        String
+  resolverId        String?
+  groupId           String?
+  postId            String?
+  commentId         String?
+  targetType        ReportTargetType
+  reason            String
+  details           String?
+  status            ReportStatus     @default(open)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  reporter          User             @relation("ReportCreator", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolver          User?            @relation("ReportResolver", fields: [resolverId], references: [id], onDelete: SetNull)
+  group             Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  post              Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  comment           Comment?         @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  moderationActions ModerationAction[]
+
+  @@index([status, createdAt])
+}
+
+model ModerationAction {
+  id          String               @id @default(cuid())
+  actorId     String
+  reportId    String?
+  groupId     String?
+  postId      String?
+  commentId   String?
+  action      ModerationActionType
+  note        String?
+  createdAt   DateTime             @default(now())
+  actor       User                 @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  report      Report?              @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  group       Group?               @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  post        Post?                @relation(fields: [postId], references: [id], onDelete: SetNull)
+  comment     Comment?             @relation(fields: [commentId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id             String          @id @default(cuid())
+  organizationId String?
+  actorId        String?
+  action         String
+  targetType     AuditTargetType
+  targetId       String
+  metadata       Json?
+  createdAt      DateTime        @default(now())
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor          User?           @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}

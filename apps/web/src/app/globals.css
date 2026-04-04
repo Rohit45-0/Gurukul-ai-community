@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+:root,
+html[data-theme="light"] {
+  --paper: #f3f6fb;
+  --paper-alt: #e9eef6;
+  --panel: rgba(255, 255, 255, 0.78);
+  --panel-strong: rgba(255, 255, 255, 0.94);
+  --panel-muted: rgba(245, 248, 252, 0.9);
+  --ink: #102033;
+  --ink-soft: #5f7085;
+  --line: rgba(16, 32, 51, 0.1);
+  --line-strong: rgba(16, 32, 51, 0.16);
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --success: #0f766e;
+  --success-soft: rgba(15, 118, 110, 0.12);
+  --teal: #0f766e;
+  --warning: #c57f17;
+  --warning-soft: rgba(197, 127, 23, 0.14);
+  --danger: #dc5b46;
+  --danger-soft: rgba(220, 91, 70, 0.12);
+  --hover: rgba(16, 32, 51, 0.045);
+  --soft-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  --shadow: 0 24px 64px rgba(15, 23, 42, 0.12);
+  --chrome-bg: rgba(255, 255, 255, 0.9);
+  --chrome-card: rgba(246, 248, 252, 0.92);
+  --chrome-line: rgba(16, 32, 51, 0.08);
+  --chrome-text: #112031;
+  --chrome-muted: rgba(73, 89, 110, 0.78);
+  --chrome-pill: rgba(37, 99, 235, 0.1);
+  --chrome-accent: #2563eb;
+  --chrome-shadow: 0 22px 70px rgba(15, 23, 42, 0.1);
+}
+
+html[data-theme="dark"] {
+  --paper: #0b1220;
+  --paper-alt: #121b2f;
+  --panel: rgba(14, 23, 39, 0.78);
+  --panel-strong: rgba(17, 27, 46, 0.92);
+  --panel-muted: rgba(24, 36, 58, 0.82);
+  --ink: #edf3ff;
+  --ink-soft: #98a8bf;
+  --line: rgba(152, 168, 191, 0.14);
+  --line-strong: rgba(152, 168, 191, 0.22);
+  --accent: #6ea8ff;
+  --accent-soft: rgba(110, 168, 255, 0.14);
+  --success: #4dd4c6;
+  --success-soft: rgba(77, 212, 198, 0.14);
+  --teal: #4dd4c6;
+  --warning: #e0a94f;
+  --warning-soft: rgba(224, 169, 79, 0.16);
+  --danger: #ff8c79;
+  --danger-soft: rgba(255, 140, 121, 0.14);
+  --hover: rgba(237, 243, 255, 0.055);
+  --soft-shadow: 0 14px 36px rgba(2, 6, 23, 0.28);
+  --shadow: 0 30px 90px rgba(2, 6, 23, 0.42);
+  --chrome-bg: rgba(14, 23, 39, 0.94);
+  --chrome-card: rgba(21, 33, 54, 0.9);
+  --chrome-line: rgba(152, 168, 191, 0.12);
+  --chrome-text: #edf3ff;
+  --chrome-muted: rgba(152, 168, 191, 0.82);
+  --chrome-pill: rgba(110, 168, 255, 0.12);
+  --chrome-accent: #6ea8ff;
+  --chrome-shadow: 0 28px 90px rgba(2, 6, 23, 0.48);
+}
+
+@theme inline {
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-display);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html[data-scroll-behavior="smooth"] {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26%),
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.06), transparent 24%),
+    linear-gradient(180deg, var(--paper) 0%, var(--paper-alt) 100%);
+  color: var(--ink);
+  font-family: var(--font-body), sans-serif;
+  min-height: 100vh;
+  transition:
+    background 200ms ease,
+    color 200ms ease;
+}
+
+a {
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.panel {
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.panel-strong {
+  background: var(--panel-strong);
+}
+
+.display-font {
+  font-family: var(--font-display), sans-serif;
+}
+
+.section-label {
+  color: var(--ink-soft);
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.soft-divider {
+  border-top: 1px solid var(--line);
+}
+
+.card-lift {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.card-lift:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.14);
+  transform: translateY(-2px);
+}
+
+html[data-theme="dark"] .card-lift:hover {
+  box-shadow: 0 26px 60px rgba(2, 6, 23, 0.36);
+}
+
+.rich-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 32, 51, 0.18) transparent;
+}
+
+html[data-theme="dark"] .rich-scrollbar {
+  scrollbar-color: rgba(152, 168, 191, 0.2) transparent;
+}
+
+.rich-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.rich-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(16, 32, 51, 0.18);
+  border-radius: 999px;
+}
+
+html[data-theme="dark"] .rich-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(152, 168, 191, 0.2);
+}

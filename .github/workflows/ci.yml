@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: /api/v1
+      BACKEND_API_URL: http://localhost:4000
+      ALLOWED_DEV_ORIGINS: localhost,127.0.0.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck web
+        run: npx tsc -p apps/web/tsconfig.json --noEmit
+
+      - name: Run API tests
+        run: npm run test --workspace @community-ai/api -- --runInBand
+
+      - name: Build API
+        run: npm run build --workspace @community-ai/api
+
+      - name: Build web
+        run: npm run build --workspace @community-ai/web

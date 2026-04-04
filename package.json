@@ -1,0 +1,19 @@
+{
+  "name": "community-ai",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @community-ai/web",
+    "dev:api": "npm run start:dev --workspace @community-ai/api",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run prisma:generate --workspace @community-ai/api",
+    "db:migrate": "npm run prisma:migrate --workspace @community-ai/api",
+    "db:seed": "npm run prisma:seed --workspace @community-ai/api"
+  }
+}

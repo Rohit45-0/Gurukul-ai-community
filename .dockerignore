@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+coverage
+.jest-cache
+.run-logs
+.npm-cache
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+Dockerfile
+npm-debug.log*
+apps/api/dist
+apps/web/.next
