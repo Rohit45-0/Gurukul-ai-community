@@ -37,7 +37,7 @@ export function AuthGateway() {
       setDevCode(response.devOtpCode ?? null);
       setStep("otp");
       setStatusMessage(
-        "OTP sent. In development, use the code shown below to continue.",
+        "OTP sent. If debug OTP mode is enabled for this environment, the code is shown below.",
       );
       toast.success("OTP sent", {
         description: `Use the code sent to ${nextEmail}.`,
@@ -102,8 +102,8 @@ export function AuthGateway() {
       </div>
 
       <p className="mt-4 text-sm leading-6 text-[var(--ink-soft)]">
-        Sign in with your invited teacher email. In local development, the OTP code
-        is returned directly so you can move fast while building.
+        Sign in with your invited teacher email. In local development, or in a test
+        deployment with debug OTP mode enabled, the code is shown directly below.
       </p>
 
       <div className="mt-6 space-y-4">

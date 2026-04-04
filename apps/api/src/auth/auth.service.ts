@@ -27,6 +27,8 @@ export class AuthService {
   ) {}
 
   async requestOtp(dto: RequestOtpDto) {
+    const exposeOtpForTesting =
+      process.env.NODE_ENV !== 'production' || this.isDebugOtpEnabled();
     const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -55,7 +57,7 @@ export class AuthService {
     return {
       success: true,
       expiresInMinutes: 10,
-      devOtpCode: process.env.NODE_ENV === 'production' ? undefined : code,
+      devOtpCode: exposeOtpForTesting ? code : undefined,
       user: {
         name: user.name,
         handle: user.handle,
@@ -391,5 +393,11 @@ export class AuthService {
     }
 
     return candidate;
+  }
+
+  private isDebugOtpEnabled() {
+    return /^(1|true|yes)$/i.test(
+      this.configService.get<string>('AUTH_DEBUG_OTP', 'false'),
+    );
   }
 }
