@@ -1,7 +1,5 @@
-import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { NotificationType, Prisma } from '@prisma/client';
-import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface NotificationInput {
@@ -19,11 +17,7 @@ interface NotificationInput {
 
 @Injectable()
 export class NotificationsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    @InjectQueue('notification-digests')
-    private readonly notificationQueue: Queue,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(input: NotificationInput) {
     const notification = await this.prisma.notification.create({
@@ -40,18 +34,6 @@ export class NotificationsService {
         payload: input.payload,
       },
     });
-
-    await this.notificationQueue.add(
-      'digest-user',
-      {
-        recipientId: input.recipientId,
-      },
-      {
-        jobId: this.buildDigestJobId(input.recipientId),
-        removeOnComplete: 50,
-        removeOnFail: 50,
-      },
-    );
 
     return notification;
   }
@@ -77,20 +59,6 @@ export class NotificationsService {
             payload: input.payload,
           },
         }),
-      ),
-    );
-
-    await Promise.all(
-      [...new Set(inputs.map((item) => item.recipientId))].map((recipientId) =>
-        this.notificationQueue.add(
-          'digest-user',
-          { recipientId },
-          {
-            jobId: this.buildDigestJobId(recipientId),
-            removeOnComplete: 50,
-            removeOnFail: 50,
-          },
-        ),
       ),
     );
 
@@ -161,9 +129,5 @@ export class NotificationsService {
     });
 
     return this.listForUser(userId);
-  }
-
-  private buildDigestJobId(recipientId: string) {
-    return `digest-${recipientId}`;
   }
 }
