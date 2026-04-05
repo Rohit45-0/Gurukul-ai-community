@@ -1,7 +1,15 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Bell, Compass, Home, LogOut, Plus, Users } from "lucide-react";
+import {
+  Bell,
+  Compass,
+  Home,
+  LogOut,
+  Plus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -13,6 +21,15 @@ import { useSession } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { NotificationSummary } from "@/lib/types";
 
+export interface AppShellMobileTab {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  content?: ReactNode;
+  badge?: number;
+  accent?: boolean;
+}
+
 export function AppShell({
   title,
   kicker,
@@ -20,6 +37,8 @@ export function AppShell({
   leftRail,
   headerContent,
   children,
+  mobileTabs,
+  defaultMobileTabId,
 }: {
   title: string;
   kicker: string;
@@ -27,6 +46,8 @@ export function AppShell({
   leftRail?: ReactNode;
   headerContent?: ReactNode;
   children: ReactNode;
+  mobileTabs?: AppShellMobileTab[];
+  defaultMobileTabId?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -40,6 +61,54 @@ export function AppShell({
   });
   const notifications = notificationsQuery.data?.items ?? [];
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
+
+  const fallbackMobileTabs: AppShellMobileTab[] = [
+    {
+      id: "feed",
+      label: "Chat",
+      icon: Home,
+      content: children,
+    },
+    {
+      id: "groups",
+      label: "Groups",
+      icon: Users,
+      content:
+        leftRail ?? (
+          <MobileEmptyState
+            copy="Your joined and created groups will appear here."
+            title="No group rail yet"
+          />
+        ),
+    },
+    {
+      id: "explore",
+      label: "Explore",
+      icon: Compass,
+      content:
+        rightRail ?? (
+          <MobileEmptyState
+            copy="Discovery and extra tools will appear here."
+            title="Nothing to explore yet"
+          />
+        ),
+    },
+    {
+      id: "signals",
+      label: "Signals",
+      icon: Bell,
+    },
+  ];
+
+  const resolvedMobileTabs = (mobileTabs?.length ? mobileTabs : fallbackMobileTabs).map(
+    (tab) =>
+      tab.id === "signals" && typeof tab.badge !== "number"
+        ? { ...tab, badge: unreadCount }
+        : tab,
+  );
+  const [activeMobileTab, setActiveMobileTab] = useState(
+    defaultMobileTabId ?? resolvedMobileTabs[0]?.id ?? "feed",
+  );
 
   if (loading || !user || !token) {
     return (
@@ -59,216 +128,335 @@ export function AppShell({
     { href: "/public-groups", label: "Public Groups", icon: Compass },
   ];
 
-  return (
-    <main className="mx-auto grid min-h-screen w-full max-w-[1580px] gap-4 px-3 py-4 sm:px-4 xl:grid-cols-[286px_minmax(0,1fr)_320px] xl:px-6">
-      <aside className="order-2 xl:order-1">
-        <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[1.7rem] border border-[var(--chrome-line)] bg-[var(--chrome-bg)] text-[var(--chrome-text)] shadow-[var(--chrome-shadow)] backdrop-blur">
-          <div className="border-b border-[var(--chrome-line)] p-5">
-            <div className="rounded-[1.35rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
-                Signed in
-              </p>
-              <h1 className="display-font mt-3 text-3xl font-semibold tracking-tight">
-                {user.name}
-              </h1>
-              <p className="mt-1 text-sm text-[var(--chrome-muted)]">
-                @{user.handle} | {user.organization?.name ?? "Platform"}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                <span className="rounded-full bg-[var(--chrome-pill)] px-3 py-1 text-[var(--chrome-accent)]">
-                  {user.organizationRole ?? user.platformRole}
-                </span>
-                <span className="rounded-full bg-[var(--warning-soft)] px-3 py-1 text-[var(--warning)]">
-                  Invite only
-                </span>
-              </div>
-            </div>
+  const activeTab =
+    resolvedMobileTabs.find((tab) => tab.id === activeMobileTab) ??
+    resolvedMobileTabs[0];
 
-            <nav className="mt-5 space-y-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-
-                return (
-                  <Link
-                    key={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-[1rem] border px-4 py-3 text-sm font-semibold transition",
-                      active
-                        ? "border-[var(--line-strong)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-transparent text-[var(--chrome-muted)] hover:border-[var(--chrome-line)] hover:bg-[var(--hover)] hover:text-[var(--chrome-text)]",
-                    )}
-                    href={item.href}
-                  >
-                    <Icon className="size-4" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="rich-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            {leftRail ? <div className="pt-5">{leftRail}</div> : null}
-
-            <div className="pt-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
-                Joined groups
-              </p>
-              <div className="mt-3 space-y-2">
-                {user.joinedGroups.length > 0 ? (
-                  user.joinedGroups.slice(0, 8).map((group) => (
-                    <Link
-                      className="block rounded-[1rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-3 text-sm transition hover:border-[var(--line-strong)] hover:bg-[var(--hover)]"
-                      href={`/groups/${group.id}`}
-                      key={group.id}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-[var(--chrome-text)]">
-                            {group.name}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--chrome-muted)]">
-                            {group.postCount} posts
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold",
-                            group.visibilityScope === "global_public"
-                              ? "bg-[var(--danger-soft)] text-[var(--danger)]"
-                              : "bg-[var(--success-soft)] text-[var(--success)]",
-                          )}
-                        >
-                          {group.visibilityScope === "global_public"
-                            ? "Public"
-                            : "Local"}
-                        </span>
-                      </div>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="rounded-[1rem] border border-dashed border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-4 text-sm leading-6 text-[var(--chrome-muted)]">
-                    Join or create a group and it will stay pinned here for quick access.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-[var(--chrome-line)] p-5">
-            <button
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-3 text-sm font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
-              onClick={() => {
-                signOut();
-                queryClient.clear();
-                toast.success("Signed out");
-                router.push("/");
-              }}
-              type="button"
-            >
-              <LogOut className="size-4" />
-              Sign out
-            </button>
-          </div>
+  const mobileContent =
+    activeTab?.id === "signals" ? (
+      <div className="space-y-4">
+        <div className="panel rounded-[1.55rem] p-4">
+          <NotificationPanel
+            notifications={notifications}
+            token={token}
+            unreadCount={unreadCount}
+          />
         </div>
-      </aside>
+        {activeTab?.content}
+      </div>
+    ) : (
+      activeTab?.content ?? children
+    );
 
-      <section className="order-1 min-w-0 xl:order-2">
-        <div className="sticky top-4 z-20">
+  return (
+    <>
+      <main className="mx-auto min-h-screen w-full max-w-6xl px-3 pb-28 pt-3 sm:px-4 xl:hidden">
+        <div className="sticky top-3 z-20">
           <header className="rounded-[1.55rem] border border-[var(--chrome-line)] bg-[var(--chrome-bg)] px-4 py-4 text-[var(--chrome-text)] shadow-[var(--chrome-shadow)] backdrop-blur sm:px-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
                   {kicker}
                 </p>
-                <h2 className="display-font mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                <h1 className="display-font mt-2 text-[2rem] font-semibold leading-tight tracking-tight">
                   {title}
-                </h2>
+                </h1>
               </div>
 
-              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:min-w-[560px] xl:justify-end">
-                {headerContent ? (
-                  <div className="min-w-0 flex-1">{headerContent}</div>
-                ) : null}
-
-                <div className="flex items-center justify-end gap-2">
-                  <ThemeToggle />
-                  <NotificationBellMenu
-                    notifications={notifications}
-                    token={token}
-                    unreadCount={unreadCount}
-                  />
-
-                  <div className="hidden rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-2 text-sm font-semibold text-[var(--chrome-muted)] sm:flex">
-                    {user.organization?.name ?? "Platform space"}
-                  </div>
-                </div>
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <NotificationBellMenu
+                  notifications={notifications}
+                  token={token}
+                  unreadCount={unreadCount}
+                />
               </div>
             </div>
 
-            <div className="rich-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 xl:hidden">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-
-                return (
-                  <Link
-                    className={cn(
-                      "inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
-                      active
-                        ? "border-[var(--line-strong)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--chrome-line)] bg-[var(--chrome-card)] text-[var(--chrome-muted)]",
-                    )}
-                    href={item.href}
-                    key={item.href}
-                  >
-                    <Icon className="size-4" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-3 py-1.5 text-xs font-semibold text-[var(--chrome-text)]">
+                {user.organization?.name ?? "Platform space"}
+              </span>
+              <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]">
+                {activeTab?.label ?? "Chat"}
+              </span>
             </div>
+
+            {headerContent ? <div className="mt-4">{headerContent}</div> : null}
           </header>
         </div>
 
-        <div className="mt-4 min-w-0">{children}</div>
-      </section>
+        <div className="mt-4 min-w-0">{mobileContent}</div>
+      </main>
 
-      <aside className="order-3 min-w-0">
-        <div className="rich-scrollbar sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto">
-          <section className="panel rounded-[1.55rem] p-5">
-            <p className="section-label">At a glance</p>
-            <div className="mt-4 grid gap-3">
-              <div className="flex items-center justify-between rounded-[1rem] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <Users className="size-4 text-[var(--ink-soft)]" />
-                  <span className="text-sm font-medium">Joined groups</span>
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] xl:hidden">
+        <nav className="pointer-events-auto mx-auto max-w-xl rounded-[1.6rem] border border-[var(--chrome-line)] bg-[var(--chrome-bg)] p-2 shadow-[var(--chrome-shadow)] backdrop-blur">
+          <div
+            className="grid gap-1"
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(resolvedMobileTabs.length, 1)}, minmax(0, 1fr))`,
+            }}
+          >
+            {resolvedMobileTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab?.id === tab.id;
+
+              return (
+                <button
+                  className={cn(
+                    "relative flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-[1.1rem] px-2 py-2 text-[11px] font-semibold transition",
+                    active
+                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                      : "text-[var(--chrome-muted)] hover:bg-[var(--hover)] hover:text-[var(--chrome-text)]",
+                    tab.accent && !active
+                      ? "bg-[var(--chrome-card)] text-[var(--chrome-text)]"
+                      : "",
+                  )}
+                  key={tab.id}
+                  onClick={() => setActiveMobileTab(tab.id)}
+                  type="button"
+                >
+                  <span className="relative inline-flex">
+                    <Icon className={cn("size-5", tab.accent ? "size-5.5" : "")} />
+                    {typeof tab.badge === "number" && tab.badge > 0 ? (
+                      <span className="absolute -right-2 -top-2 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {tab.badge > 9 ? "9+" : tab.badge}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+
+      <main className="mx-auto hidden min-h-screen w-full max-w-[1580px] gap-4 px-3 py-4 sm:px-4 xl:grid xl:grid-cols-[286px_minmax(0,1fr)_320px] xl:px-6">
+        <aside className="order-2 xl:order-1">
+          <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[1.7rem] border border-[var(--chrome-line)] bg-[var(--chrome-bg)] text-[var(--chrome-text)] shadow-[var(--chrome-shadow)] backdrop-blur">
+            <div className="border-b border-[var(--chrome-line)] p-5">
+              <div className="rounded-[1.35rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
+                  Signed in
+                </p>
+                <h1 className="display-font mt-3 text-3xl font-semibold tracking-tight">
+                  {user.name}
+                </h1>
+                <p className="mt-1 text-sm text-[var(--chrome-muted)]">
+                  @{user.handle} | {user.organization?.name ?? "Platform"}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                  <span className="rounded-full bg-[var(--chrome-pill)] px-3 py-1 text-[var(--chrome-accent)]">
+                    {user.organizationRole ?? user.platformRole}
+                  </span>
+                  <span className="rounded-full bg-[var(--warning-soft)] px-3 py-1 text-[var(--warning)]">
+                    Invite only
+                  </span>
                 </div>
-                <span className="display-font text-xl font-semibold">
-                  {user.joinedGroups.length}
-                </span>
               </div>
-              <div className="flex items-center justify-between rounded-[1rem] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <Bell className="size-4 text-[var(--ink-soft)]" />
-                  <span className="text-sm font-medium">Unread signals</span>
+
+              <nav className="mt-5 space-y-2">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href;
+
+                  return (
+                    <Link
+                      className={cn(
+                        "flex items-center gap-3 rounded-[1rem] border px-4 py-3 text-sm font-semibold transition",
+                        active
+                          ? "border-[var(--line-strong)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "border-transparent text-[var(--chrome-muted)] hover:border-[var(--chrome-line)] hover:bg-[var(--hover)] hover:text-[var(--chrome-text)]",
+                      )}
+                      href={item.href}
+                      key={item.href}
+                    >
+                      <Icon className="size-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+
+            <div className="rich-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+              {leftRail ? <div className="pt-5">{leftRail}</div> : null}
+
+              <div className="pt-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
+                  Joined groups
+                </p>
+                <div className="mt-3 space-y-2">
+                  {user.joinedGroups.length > 0 ? (
+                    user.joinedGroups.slice(0, 8).map((group) => (
+                      <Link
+                        className="block rounded-[1rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-3 text-sm transition hover:border-[var(--line-strong)] hover:bg-[var(--hover)]"
+                        href={`/groups/${group.id}`}
+                        key={group.id}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-[var(--chrome-text)]">
+                              {group.name}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--chrome-muted)]">
+                              {group.postCount} posts
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold",
+                              group.visibilityScope === "global_public"
+                                ? "bg-[var(--danger-soft)] text-[var(--danger)]"
+                                : "bg-[var(--success-soft)] text-[var(--success)]",
+                            )}
+                          >
+                            {group.visibilityScope === "global_public"
+                              ? "Public"
+                              : "Local"}
+                          </span>
+                        </div>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="rounded-[1rem] border border-dashed border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-4 text-sm leading-6 text-[var(--chrome-muted)]">
+                      Join or create a group and it will stay pinned here for quick access.
+                    </div>
+                  )}
                 </div>
-                <span className="display-font text-xl font-semibold">
-                  {unreadCount}
-                </span>
               </div>
             </div>
-            <div className="mt-4 rounded-[1rem] border border-dashed border-[var(--line)] bg-[var(--panel-muted)] px-4 py-4 text-sm leading-6 text-[var(--ink-soft)]">
-              Use the bell in the top bar for reactions, replies, mentions, invites,
-              and moderation updates.
-            </div>
-          </section>
 
-          {rightRail}
-        </div>
-      </aside>
-    </main>
+            <div className="border-t border-[var(--chrome-line)] p-5">
+              <button
+                className="flex w-full items-center justify-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-3 text-sm font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
+                onClick={() => {
+                  signOut();
+                  queryClient.clear();
+                  toast.success("Signed out");
+                  router.push("/");
+                }}
+                type="button"
+              >
+                <LogOut className="size-4" />
+                Sign out
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <section className="order-1 min-w-0 xl:order-2">
+          <div className="sticky top-4 z-20">
+            <header className="rounded-[1.55rem] border border-[var(--chrome-line)] bg-[var(--chrome-bg)] px-4 py-4 text-[var(--chrome-text)] shadow-[var(--chrome-shadow)] backdrop-blur sm:px-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
+                    {kicker}
+                  </p>
+                  <h2 className="display-font mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                    {title}
+                  </h2>
+                </div>
+
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:min-w-[560px] xl:justify-end">
+                  {headerContent ? (
+                    <div className="min-w-0 flex-1">{headerContent}</div>
+                  ) : null}
+
+                  <div className="flex items-center justify-end gap-2">
+                    <ThemeToggle />
+                    <NotificationBellMenu
+                      notifications={notifications}
+                      token={token}
+                      unreadCount={unreadCount}
+                    />
+
+                    <div className="hidden rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-2 text-sm font-semibold text-[var(--chrome-muted)] sm:flex">
+                      {user.organization?.name ?? "Platform space"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rich-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 xl:hidden">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href;
+
+                  return (
+                    <Link
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
+                        active
+                          ? "border-[var(--line-strong)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "border-[var(--chrome-line)] bg-[var(--chrome-card)] text-[var(--chrome-muted)]",
+                      )}
+                      href={item.href}
+                      key={item.href}
+                    >
+                      <Icon className="size-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </header>
+          </div>
+
+          <div className="mt-4 min-w-0">{children}</div>
+        </section>
+
+        <aside className="order-3 min-w-0">
+          <div className="rich-scrollbar sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto">
+            <section className="panel rounded-[1.55rem] p-5">
+              <p className="section-label">At a glance</p>
+              <div className="mt-4 grid gap-3">
+                <div className="flex items-center justify-between rounded-[1rem] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Users className="size-4 text-[var(--ink-soft)]" />
+                    <span className="text-sm font-medium">Joined groups</span>
+                  </div>
+                  <span className="display-font text-xl font-semibold">
+                    {user.joinedGroups.length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-[1rem] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Bell className="size-4 text-[var(--ink-soft)]" />
+                    <span className="text-sm font-medium">Unread signals</span>
+                  </div>
+                  <span className="display-font text-xl font-semibold">
+                    {unreadCount}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 rounded-[1rem] border border-dashed border-[var(--line)] bg-[var(--panel-muted)] px-4 py-4 text-sm leading-6 text-[var(--ink-soft)]">
+                Use the bell in the top bar for reactions, replies, mentions, invites,
+                and moderation updates.
+              </div>
+            </section>
+
+            {rightRail}
+          </div>
+        </aside>
+      </main>
+    </>
+  );
+}
+
+function MobileEmptyState({
+  title,
+  copy,
+}: {
+  title: string;
+  copy: string;
+}) {
+  return (
+    <section className="panel rounded-[1.55rem] px-5 py-8 text-center">
+      <p className="display-font text-2xl font-semibold">{title}</p>
+      <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">{copy}</p>
+    </section>
   );
 }
 
@@ -281,7 +469,6 @@ function NotificationBellMenu({
   unreadCount: number;
   token: string;
 }) {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -302,23 +489,6 @@ function NotificationBellMenu({
     };
   }, []);
 
-  const latestNotifications = notifications.slice(0, 6);
-
-  const markRead = async (notificationId: string) => {
-    try {
-      await markNotificationRead(token, notificationId);
-      await queryClient.invalidateQueries({
-        queryKey: ["notifications", token],
-      });
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to mark notification as read.",
-      );
-    }
-  };
-
   return (
     <div className="relative" ref={containerRef}>
       <button
@@ -338,85 +508,129 @@ function NotificationBellMenu({
 
       {open ? (
         <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-[min(92vw,360px)] rounded-[1.4rem] border border-[var(--chrome-line)] bg-[var(--chrome-bg)] p-3 text-[var(--chrome-text)] shadow-[var(--chrome-shadow)] backdrop-blur">
-          <div className="flex items-center justify-between gap-3 px-2 pb-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
-                Notifications
-              </p>
-              <p className="mt-1 text-sm text-[var(--chrome-muted)]">
-                {unreadCount > 0
-                  ? `${unreadCount} unread updates`
-                  : "You are all caught up"}
-              </p>
-            </div>
-            <Link
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-3 py-2 text-xs font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
-              href="/public-groups"
-              onClick={() => setOpen(false)}
-            >
-              <Plus className="size-3.5" />
-              Explore
-            </Link>
-          </div>
-
-          <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-            {latestNotifications.length > 0 ? (
-              latestNotifications.map((notification) => (
-                <article
-                  className="rounded-[1rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-3"
-                  key={notification.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[var(--chrome-text)]">
-                        {notification.title}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--chrome-muted)]">
-                        {notification.message}
-                      </p>
-                      <p className="mt-2 text-xs text-[var(--chrome-muted)]">
-                        {formatDistanceToNow(new Date(notification.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </p>
-                    </div>
-
-                    {!notification.readAt ? (
-                      <button
-                        className="shrink-0 rounded-full border border-[var(--chrome-line)] px-2 py-1 text-[11px] font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
-                        onClick={() => void markRead(notification.id)}
-                        type="button"
-                      >
-                        Read
-                      </button>
-                    ) : (
-                      <span className="shrink-0 rounded-full bg-[var(--success-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--success)]">
-                        Seen
-                      </span>
-                    )}
-                  </div>
-
-                  {notification.group ? (
-                    <div className="mt-3">
-                      <Link
-                        className="inline-flex items-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-3 py-2 text-xs font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
-                        href={`/groups/${notification.group.id}`}
-                        onClick={() => setOpen(false)}
-                      >
-                        Open group
-                      </Link>
-                    </div>
-                  ) : null}
-                </article>
-              ))
-            ) : (
-              <div className="rounded-[1rem] border border-dashed border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-5 text-sm leading-6 text-[var(--chrome-muted)]">
-                No signals yet. Reactions, replies, mentions, and invites will appear here.
-              </div>
-            )}
-          </div>
+          <NotificationPanel
+            compact
+            notifications={notifications}
+            onNavigate={() => setOpen(false)}
+            token={token}
+            unreadCount={unreadCount}
+          />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function NotificationPanel({
+  notifications,
+  unreadCount,
+  token,
+  onNavigate,
+  compact = false,
+}: {
+  notifications: NotificationSummary[];
+  unreadCount: number;
+  token: string;
+  onNavigate?: () => void;
+  compact?: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const visibleNotifications = notifications.slice(0, compact ? 6 : 12);
+
+  const markRead = async (notificationId: string) => {
+    try {
+      await markNotificationRead(token, notificationId);
+      await queryClient.invalidateQueries({
+        queryKey: ["notifications", token],
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to mark notification as read.",
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
+            Notifications
+          </p>
+          <p className="mt-1 text-sm text-[var(--chrome-muted)]">
+            {unreadCount > 0
+              ? `${unreadCount} unread updates`
+              : "You are all caught up"}
+          </p>
+        </div>
+        <Link
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-3 py-2 text-xs font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
+          href="/public-groups"
+          onClick={onNavigate}
+        >
+          <Plus className="size-3.5" />
+          Explore
+        </Link>
+      </div>
+
+      <div className="space-y-2">
+        {visibleNotifications.length > 0 ? (
+          visibleNotifications.map((notification) => (
+            <article
+              className="rounded-[1rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-3"
+              key={notification.id}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[var(--chrome-text)]">
+                    {notification.title}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--chrome-muted)]">
+                    {notification.message}
+                  </p>
+                  <p className="mt-2 text-xs text-[var(--chrome-muted)]">
+                    {formatDistanceToNow(new Date(notification.createdAt), {
+                      addSuffix: true,
+                    })}
+                  </p>
+                </div>
+
+                {!notification.readAt ? (
+                  <button
+                    className="shrink-0 rounded-full border border-[var(--chrome-line)] px-2 py-1 text-[11px] font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
+                    onClick={() => void markRead(notification.id)}
+                    type="button"
+                  >
+                    Read
+                  </button>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-[var(--success-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--success)]">
+                    Seen
+                  </span>
+                )}
+              </div>
+
+              {notification.group ? (
+                <div className="mt-3">
+                  <Link
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-3 py-2 text-xs font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
+                    href={`/groups/${notification.group.id}`}
+                    onClick={onNavigate}
+                  >
+                    Open group
+                  </Link>
+                </div>
+              ) : null}
+            </article>
+          ))
+        ) : (
+          <div className="rounded-[1rem] border border-dashed border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-5 text-sm leading-6 text-[var(--chrome-muted)]">
+            No signals yet. Reactions, replies, mentions, and invites will appear here.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

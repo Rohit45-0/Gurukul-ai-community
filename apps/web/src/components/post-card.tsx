@@ -126,7 +126,7 @@ export function PostCard({
         </div>
 
         <div>
-          <h3 className="display-font text-[1.65rem] font-semibold leading-tight text-[var(--ink)]">
+          <h3 className="display-font text-[1.4rem] font-semibold leading-tight text-[var(--ink)] sm:text-[1.65rem]">
             {post.title}
           </h3>
           <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">
@@ -161,7 +161,7 @@ export function PostCard({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-4">
+        <div className="rich-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto border-t border-[var(--line)] px-1 pb-1 pt-4 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
           {POST_REACTIONS.map((reaction) => {
             const count =
               post.reactionSummary.find((item) => item.emoji === reaction.emoji)?.count ??

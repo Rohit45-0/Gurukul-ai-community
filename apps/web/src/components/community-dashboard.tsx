@@ -5,10 +5,15 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
+  Bell,
+  Compass,
+  Home,
   Loader2,
   MailPlus,
+  Plus,
   Search,
   ShieldAlert,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
@@ -116,8 +121,309 @@ export function CommunityDashboard({
     return null;
   }
 
+  const adminToolsVisible =
+    user.organizationRole === "org_admin" ||
+    user.platformRole === "platform_admin";
+
+  const startCirclePanel =
+    mode === "organization" ? (
+      <section className="rounded-[1.25rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-4 text-[var(--chrome-text)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
+          Start a circle
+        </p>
+        <p className="mt-2 text-sm leading-6 text-[var(--chrome-muted)]">
+          Create a new teacher group here, then decide whether it stays local
+          or opens across institutions.
+        </p>
+        <div className="mt-4">
+          <CreateGroupDialog onCreated={refreshCommunity} token={token} />
+        </div>
+      </section>
+    ) : (
+      <section className="rounded-[1.25rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-4 text-[var(--chrome-text)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
+          Cross-school mode
+        </p>
+        <p className="mt-2 text-sm leading-6 text-[var(--chrome-muted)]">
+          Public circles stay separate from the school feed so local updates do
+          not get buried. You can still create a new group from here.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <CreateGroupDialog onCreated={refreshCommunity} token={token} />
+          <Link
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
+            href="/community"
+          >
+            Back to campus feed
+            <ArrowUpRight className="size-4" />
+          </Link>
+        </div>
+      </section>
+    );
+
+  const createdGroupsPanel = <CreatedGroupsRail groups={createdGroups} />;
+
+  const discoveryPanel = (
+    <DiscoveryRail
+      groups={
+        mode === "organization"
+          ? discoverablePublicGroups
+          : discoverablePublicGroups.slice(0, 6)
+      }
+      mode={mode}
+      token={token}
+      user={user}
+      onRefresh={refreshCommunity}
+    />
+  );
+
+  const invitePanel = adminToolsVisible ? (
+    <InviteTeacherPanel onInvited={refreshCommunity} token={token} />
+  ) : null;
+
+  const moderationPanel = adminToolsVisible ? (
+    <ModerationPanel
+      reports={reportsQuery.data?.items ?? []}
+      token={token}
+      onAction={refreshCommunity}
+    />
+  ) : null;
+
+  const mobileGroups = mode === "organization" ? groupsQuery.data?.items ?? [] : featuredGroups;
+
+  const mobileGroupsContent = (
+    <div className="space-y-4">
+      <section className="panel rounded-[1.55rem] p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="section-label">Group directory</p>
+            <h3 className="display-font mt-2 text-2xl font-semibold">
+              {mode === "organization" ? "Your circles" : "Joined and public circles"}
+            </h3>
+          </div>
+          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+            {mobileGroups.length}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-[1rem] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-soft)]">
+              Joined
+            </p>
+            <p className="display-font mt-2 text-2xl font-semibold">
+              {user.joinedGroups.length}
+            </p>
+          </div>
+          <div className="rounded-[1rem] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-soft)]">
+              Created
+            </p>
+            <p className="display-font mt-2 text-2xl font-semibold">
+              {createdGroups.length}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {createdGroupsPanel}
+
+      <MobileGroupDirectory
+        emptyCopy={
+          mode === "organization"
+            ? "Create a first group and it will appear here for quick mobile access."
+            : "Join a public group and it will show here as a separate mobile list."
+        }
+        groups={mobileGroups}
+        mode={mode}
+        onRefresh={refreshCommunity}
+        token={token}
+        title={mode === "organization" ? "All campus groups" : "Public circles"}
+        user={user}
+      />
+    </div>
+  );
+
+  const mobileCreateContent = (
+    <div className="space-y-4">
+      {startCirclePanel}
+      {invitePanel ?? (
+        <section className="panel rounded-[1.55rem] p-5">
+          <p className="section-label">Quick mobile flow</p>
+          <h3 className="display-font mt-2 text-2xl font-semibold">
+            Create first, then post inside the group
+          </h3>
+          <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">
+            On mobile the fastest pattern is: create the circle, open it, then
+            publish a post from the Post tab. That keeps groups and discussions
+            feeling separate, like a real messaging app.
+          </p>
+        </section>
+      )}
+    </div>
+  );
+
+  const mobileExploreContent = <div className="space-y-4">{discoveryPanel}</div>;
+
+  const mobileSignalsContent = moderationPanel ? (
+    <div className="space-y-4">{moderationPanel}</div>
+  ) : (
+    <section className="panel rounded-[1.55rem] p-5">
+      <p className="section-label">Signals</p>
+      <h3 className="display-font mt-2 text-2xl font-semibold">
+        Reactions and replies land here
+      </h3>
+      <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">
+        Your notification feed is now a dedicated mobile tab so mentions,
+        replies, and reactions do not get buried under the main timeline.
+      </p>
+    </section>
+  );
+
+  const feedContent = (
+    <div className="space-y-4">
+      {deferredSearch.trim().length >= 2 ? (
+        <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="panel rounded-[1.55rem] p-5">
+            <p className="section-label">Matching groups</p>
+            <div className="mt-4 space-y-3">
+              {searchQuery.data?.groups.length ? (
+                searchQuery.data.groups.map((group) => (
+                  <GroupTile
+                    group={group}
+                    key={group.id}
+                    token={token}
+                    user={user}
+                    onRefresh={refreshCommunity}
+                  />
+                ))
+              ) : (
+                <EmptyCard copy="No groups matched that search yet." title="No group results" />
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {searchQuery.data?.posts.length ? (
+              searchQuery.data.posts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  onRefresh={refreshCommunity}
+                  post={post}
+                  showGroup
+                  token={token}
+                />
+              ))
+            ) : (
+              <EmptyCard
+                copy="Try another phrase, a group name, or a keyword from a post title."
+                title="No post results"
+              />
+            )}
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="panel rounded-[1.55rem] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="section-label">
+                  {mode === "organization" ? "Feed overview" : "Public view"}
+                </p>
+                <h3 className="display-font mt-2 text-2xl font-semibold tracking-tight">
+                  {mode === "organization"
+                    ? "Chat-style feed for real teacher exchange"
+                    : "Public circles stay separate from your campus stream"}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">
+                  {mode === "organization"
+                    ? "Mobile now treats feed, groups, create, and signals as separate spaces so you can move around like a messaging app instead of scrolling one long dashboard."
+                    : "Browse open discussions without losing the clean separation between cross-school discovery and your local staffroom conversations."}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                <span className="rounded-full bg-[var(--success-soft)] px-3 py-2 text-[var(--success)]">
+                  {featuredGroups.length} circles in view
+                </span>
+                <span className="rounded-full bg-[var(--accent-soft)] px-3 py-2 text-[var(--accent)]">
+                  {feedItems.length} posts in feed
+                </span>
+              </div>
+            </div>
+
+            <div className="rich-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1">
+              {featuredGroups.length > 0 ? (
+                featuredGroups.slice(0, 8).map((group) => (
+                  <Link
+                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--panel-strong)]"
+                    href={`/groups/${group.id}`}
+                    key={group.id}
+                  >
+                    {group.name}
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-1 text-[11px] font-semibold",
+                        group.visibilityScope === "global_public"
+                          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "bg-[var(--success-soft)] text-[var(--success)]",
+                      )}
+                    >
+                      {group.visibilityScope === "global_public"
+                        ? "Public"
+                        : "Local"}
+                    </span>
+                  </Link>
+                ))
+              ) : (
+                <div className="rounded-full border border-dashed border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3 text-sm text-[var(--ink-soft)]">
+                  No groups yet. Create the first teacher circle to get started.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            {feedQuery.isLoading ? (
+              <div className="panel rounded-[1.8rem] px-6 py-16 text-center">
+                <Loader2 className="mx-auto size-6 animate-spin text-[var(--ink-soft)]" />
+                <p className="mt-3 text-sm text-[var(--ink-soft)]">
+                  Loading discussions...
+                </p>
+              </div>
+            ) : feedItems.length > 0 ? (
+              feedItems.map((post) => (
+                <PostCard
+                  key={post.id}
+                  onRefresh={refreshCommunity}
+                  post={post}
+                  showGroup
+                  token={token}
+                />
+              ))
+            ) : (
+              <EmptyCard
+                copy={
+                  mode === "organization"
+                    ? "Posts from your institution will appear here as soon as a teacher publishes inside one of your local circles."
+                    : "Join a public group first and its discussions will begin showing up here."
+                }
+                title={
+                  mode === "organization"
+                    ? "No campus discussions yet"
+                    : "No joined public discussions yet"
+                }
+              />
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <AppShell
+      defaultMobileTabId={mode === "organization" ? "chat" : "explore"}
       headerContent={
         <div className="flex items-center gap-3 rounded-full border border-[var(--chrome-line)] bg-[var(--chrome-card)] px-4 py-3 text-sm text-[var(--chrome-muted)]">
           <Search className="size-4 shrink-0 text-[var(--chrome-muted)]" />
@@ -130,215 +436,48 @@ export function CommunityDashboard({
         </div>
       }
       kicker={mode === "organization" ? "Teacher home feed" : "Cross-school discovery"}
-      leftRail={
-        <div className="space-y-4">
-          {mode === "organization" ? (
-            <section className="rounded-[1.25rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-4 text-[var(--chrome-text)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
-                Start a circle
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--chrome-muted)]">
-                Create a new teacher group here, then decide whether it stays local
-                or opens across institutions.
-              </p>
-              <div className="mt-4">
-                <CreateGroupDialog onCreated={refreshCommunity} token={token} />
-              </div>
-            </section>
-          ) : (
-            <section className="rounded-[1.25rem] border border-[var(--chrome-line)] bg-[var(--chrome-card)] p-4 text-[var(--chrome-text)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--chrome-muted)]">
-                Switch context
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--chrome-muted)]">
-                Public circles stay separate from the school feed so local updates
-                do not get buried under cross-school discussion.
-              </p>
-              <Link
-                className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--chrome-line)] bg-[var(--panel-muted)] px-4 py-2 text-sm font-semibold text-[var(--chrome-text)] transition hover:bg-[var(--hover)]"
-                href="/community"
-              >
-                Back to campus feed
-                <ArrowUpRight className="size-4" />
-              </Link>
-            </section>
-          )}
-
-          <CreatedGroupsRail groups={createdGroups} />
-        </div>
-      }
-      rightRail={
-        <div className="space-y-4">
-          <DiscoveryRail
-            groups={
-              mode === "organization"
-                ? discoverablePublicGroups
-                : discoverablePublicGroups.slice(0, 6)
-            }
-            mode={mode}
-            token={token}
-            user={user}
-            onRefresh={refreshCommunity}
-          />
-
-          {(user.organizationRole === "org_admin" ||
-            user.platformRole === "platform_admin") && (
-            <InviteTeacherPanel onInvited={refreshCommunity} token={token} />
-          )}
-          {(user.organizationRole === "org_admin" ||
-            user.platformRole === "platform_admin") && (
-            <ModerationPanel
-              reports={reportsQuery.data?.items ?? []}
-              token={token}
-              onAction={refreshCommunity}
-            />
-          )}
-        </div>
-      }
+      leftRail={<div className="space-y-4">{startCirclePanel}{createdGroupsPanel}</div>}
+      mobileTabs={[
+        {
+          id: "chat",
+          label: "Chat",
+          icon: Home,
+          content: feedContent,
+        },
+        {
+          id: "groups",
+          label: "Groups",
+          icon: Users,
+          content: mobileGroupsContent,
+        },
+        {
+          id: "create",
+          label: "Create",
+          icon: Plus,
+          content: mobileCreateContent,
+          accent: true,
+        },
+        {
+          id: "explore",
+          label: "Explore",
+          icon: Compass,
+          content: mobileExploreContent,
+        },
+        {
+          id: "signals",
+          label: "Signals",
+          icon: Bell,
+          content: mobileSignalsContent,
+        },
+      ]}
+      rightRail={<div className="space-y-4">{discoveryPanel}{invitePanel}{moderationPanel}</div>}
       title={
         mode === "organization"
           ? "Campus conversations"
           : "Public circles and joined threads"
       }
     >
-      <div className="space-y-4">
-        {deferredSearch.trim().length >= 2 ? (
-          <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <div className="panel rounded-[1.55rem] p-5">
-              <p className="section-label">Matching groups</p>
-              <div className="mt-4 space-y-3">
-                {searchQuery.data?.groups.length ? (
-                  searchQuery.data.groups.map((group) => (
-                    <GroupTile
-                      group={group}
-                      key={group.id}
-                      token={token}
-                      user={user}
-                      onRefresh={refreshCommunity}
-                    />
-                  ))
-                ) : (
-                  <EmptyCard copy="No groups matched that search yet." title="No group results" />
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {searchQuery.data?.posts.length ? (
-                searchQuery.data.posts.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    onRefresh={refreshCommunity}
-                    post={post}
-                    showGroup
-                    token={token}
-                  />
-                ))
-              ) : (
-                <EmptyCard
-                  copy="Try another phrase, a group name, or a keyword from a post title."
-                  title="No post results"
-                />
-              )}
-            </div>
-          </section>
-        ) : (
-          <>
-            <section className="panel rounded-[1.55rem] p-5 sm:p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-3xl">
-                  <p className="section-label">
-                    {mode === "organization" ? "Feed overview" : "Public view"}
-                  </p>
-                  <h3 className="display-font mt-2 text-2xl font-semibold tracking-tight">
-                    {mode === "organization"
-                      ? "A clearer, forum-style feed for real teacher exchange"
-                      : "Discover open groups without flooding your local school stream"}
-                  </h3>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">
-                    {mode === "organization"
-                      ? "The center column now focuses on scanning posts first, while creation, discovery, and admin tools move into predictable side rails."
-                      : "Public groups stay in their own discovery space so teachers can join broader conversations while school-specific coordination remains tidy."}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                  <span className="rounded-full bg-[var(--success-soft)] px-3 py-2 text-[var(--success)]">
-                    {featuredGroups.length} circles in view
-                  </span>
-                  <span className="rounded-full bg-[var(--accent-soft)] px-3 py-2 text-[var(--accent)]">
-                    {feedItems.length} posts in feed
-                  </span>
-                </div>
-              </div>
-
-              <div className="rich-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1">
-                {featuredGroups.length > 0 ? (
-                  featuredGroups.slice(0, 8).map((group) => (
-                    <Link
-                      className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--panel-strong)]"
-                      href={`/groups/${group.id}`}
-                      key={group.id}
-                    >
-                      {group.name}
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-1 text-[11px] font-semibold",
-                          group.visibilityScope === "global_public"
-                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                            : "bg-[var(--success-soft)] text-[var(--success)]",
-                        )}
-                      >
-                        {group.visibilityScope === "global_public"
-                          ? "Public"
-                          : "Local"}
-                      </span>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="rounded-full border border-dashed border-[var(--line)] bg-[var(--panel-muted)] px-4 py-3 text-sm text-[var(--ink-soft)]">
-                    No groups yet. Create the first teacher circle to get started.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              {feedQuery.isLoading ? (
-                <div className="panel rounded-[1.8rem] px-6 py-16 text-center">
-                  <Loader2 className="mx-auto size-6 animate-spin text-[var(--ink-soft)]" />
-                  <p className="mt-3 text-sm text-[var(--ink-soft)]">
-                    Loading discussions...
-                  </p>
-                </div>
-              ) : feedItems.length > 0 ? (
-                feedItems.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    onRefresh={refreshCommunity}
-                    post={post}
-                    showGroup
-                    token={token}
-                  />
-                ))
-              ) : (
-                <EmptyCard
-                  copy={
-                    mode === "organization"
-                      ? "Posts from your institution will appear here as soon as a teacher publishes inside one of your local circles."
-                      : "Join a public group first and its discussions will begin showing up here."
-                  }
-                  title={
-                    mode === "organization"
-                      ? "No campus discussions yet"
-                      : "No joined public discussions yet"
-                  }
-                />
-              )}
-            </section>
-          </>
-        )}
-      </div>
+      {feedContent}
     </AppShell>
   );
 }
@@ -517,6 +656,56 @@ function CreatedGroupsRail({ groups }: { groups: GroupSummary[] }) {
         ) : (
           <div className="rounded-[1rem] border border-dashed border-[var(--chrome-line)] bg-[var(--panel-muted)] px-4 py-4 text-sm leading-6 text-[var(--chrome-muted)]">
             No groups created yet. Your new circles will appear here immediately.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MobileGroupDirectory({
+  title,
+  groups,
+  token,
+  user,
+  onRefresh,
+  emptyCopy,
+  mode,
+}: {
+  title: string;
+  groups: GroupSummary[];
+  token: string;
+  user: NonNullable<ReturnType<typeof useSession>["user"]>;
+  onRefresh: () => Promise<void> | void;
+  emptyCopy: string;
+  mode: "organization" | "public";
+}) {
+  return (
+    <section className="panel rounded-[1.55rem] p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="section-label">{mode === "organization" ? "Campus groups" : "Joined circles"}</p>
+          <h3 className="display-font mt-2 text-2xl font-semibold">{title}</h3>
+        </div>
+        <span className="rounded-full border border-[var(--line)] bg-[var(--panel-muted)] px-3 py-2 text-xs font-semibold text-[var(--ink-soft)]">
+          {groups.length}
+        </span>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {groups.length > 0 ? (
+          groups.map((group) => (
+            <CompactDiscoveryCard
+              group={group}
+              key={group.id}
+              token={token}
+              user={user}
+              onRefresh={onRefresh}
+            />
+          ))
+        ) : (
+          <div className="rounded-[1rem] border border-dashed border-[var(--line)] bg-[var(--panel-muted)] px-4 py-5 text-sm leading-6 text-[var(--ink-soft)]">
+            {emptyCopy}
           </div>
         )}
       </div>
