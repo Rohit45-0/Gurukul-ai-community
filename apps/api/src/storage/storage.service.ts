@@ -14,6 +14,10 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { createReadStream } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { Express } from 'express';
 import type { AuthTokenPayload } from '../auth/auth.types';
@@ -32,7 +36,10 @@ const ALLOWED_MIME_TYPES = new Set([
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
   private readonly bucket: string;
-  private readonly s3: S3Client;
+  private readonly s3?: S3Client;
+  private readonly localUploadRoot = join(tmpdir(), 'community-ai-uploads');
+  private readonly minioEndpoint?: string;
+  private storageMode: 's3' | 'local' = 'local';
 
   constructor(
     private readonly configService: ConfigService,
@@ -42,32 +49,49 @@ export class StorageService implements OnModuleInit {
       'MINIO_BUCKET',
       'community-ai',
     );
-    this.s3 = new S3Client({
-      region: 'us-east-1',
-      endpoint: `http://${this.configService.get<string>('MINIO_ENDPOINT', 'localhost')}:${this.configService.get<string>('MINIO_PORT', '9000')}`,
-      credentials: {
-        accessKeyId: this.configService.get<string>(
-          'MINIO_ACCESS_KEY',
-          'minioadmin',
-        ),
-        secretAccessKey: this.configService.get<string>(
-          'MINIO_SECRET_KEY',
-          'minioadmin',
-        ),
-      },
-      forcePathStyle: true,
-    });
+    this.minioEndpoint =
+      this.configService.get<string>('MINIO_ENDPOINT')?.trim() || undefined;
+
+    if (this.minioEndpoint) {
+      this.s3 = new S3Client({
+        region: 'us-east-1',
+        endpoint: `http://${this.minioEndpoint}:${this.configService.get<string>('MINIO_PORT', '9000')}`,
+        credentials: {
+          accessKeyId: this.configService.get<string>(
+            'MINIO_ACCESS_KEY',
+            'minioadmin',
+          ),
+          secretAccessKey: this.configService.get<string>(
+            'MINIO_SECRET_KEY',
+            'minioadmin',
+          ),
+        },
+        forcePathStyle: true,
+      });
+    }
   }
 
   async onModuleInit() {
+    if (!this.s3) {
+      await mkdir(this.localUploadRoot, { recursive: true });
+      this.logger.warn(
+        'MinIO is not configured. Falling back to local attachment storage for this deployment.',
+      );
+      return;
+    }
+
     try {
       await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      this.storageMode = 's3';
     } catch {
       try {
         await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
+        this.storageMode = 's3';
       } catch (error) {
+        this.storageMode = 'local';
+        await mkdir(this.localUploadRoot, { recursive: true });
         this.logger.warn(
-          `Bucket bootstrap skipped. Ensure MinIO is available before uploading files. ${String(error)}`,
+          `Bucket bootstrap skipped. Falling back to local attachment storage. ${String(error)}`,
         );
       }
     }
@@ -90,14 +114,21 @@ export class StorageService implements OnModuleInit {
 
     const storageKey = `${actor.homeOrganizationId ?? 'platform'}/${actor.sub}/${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
 
-    await this.s3.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: storageKey,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      }),
-    );
+    const persistedStorageKey =
+      this.storageMode === 's3'
+        ? storageKey
+        : await this.saveLocally(storageKey, file.buffer);
+
+    if (this.storageMode === 's3' && this.s3) {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: storageKey,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
+    }
 
     return this.prisma.attachment.create({
       data: {
@@ -105,7 +136,7 @@ export class StorageService implements OnModuleInit {
         fileName: file.originalname,
         mimeType: file.mimetype,
         size: file.size,
-        storageKey,
+        storageKey: persistedStorageKey,
       },
     });
   }
@@ -144,6 +175,25 @@ export class StorageService implements OnModuleInit {
       }
     }
 
+    if (attachment.storageKey.startsWith('local/')) {
+      const localPath = join(
+        this.localUploadRoot,
+        attachment.storageKey.replace(/^local\//, ''),
+      );
+
+      return {
+        stream: createReadStream(localPath),
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+      };
+    }
+
+    if (!this.s3) {
+      throw new NotFoundException(
+        'This attachment is unavailable because object storage is not configured.',
+      );
+    }
+
     const objectResponse = await this.s3.send(
       new GetObjectCommand({
         Bucket: this.bucket,
@@ -156,5 +206,13 @@ export class StorageService implements OnModuleInit {
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
     };
+  }
+
+  private async saveLocally(storageKey: string, buffer: Buffer) {
+    const localKey = `local/${storageKey}`;
+    const filePath = join(this.localUploadRoot, storageKey);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, buffer);
+    return localKey;
   }
 }

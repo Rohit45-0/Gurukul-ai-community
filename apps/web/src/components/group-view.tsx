@@ -498,6 +498,11 @@ function PostComposerCard({
           <p className="text-sm text-[var(--accent)]">
             Join this public group before adding a post.
           </p>
+        ) : title.trim().length < 4 || body.trim().length < 12 ? (
+          <p className="text-sm text-[var(--ink-soft)]">
+            Add at least 4 characters in the title and 12 characters in the post
+            body before publishing.
+          </p>
         ) : null}
       </div>
     </section>
