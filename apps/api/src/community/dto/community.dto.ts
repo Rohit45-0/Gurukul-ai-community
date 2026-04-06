@@ -49,12 +49,12 @@ export class UpdateVisibilityDto {
 
 export class CreatePostDto {
   @IsString()
-  @MinLength(4)
+  @MinLength(2)
   @MaxLength(120)
   title!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(3)
   @MaxLength(4000)
   body!: string;
 

@@ -483,8 +483,8 @@ function PostComposerCard({
             disabled={
               submitting ||
               !canPost ||
-              title.trim().length < 4 ||
-              body.trim().length < 12
+              title.trim().length < 2 ||
+              body.trim().length < 3
             }
             onClick={() => void onPublish()}
             type="button"
@@ -498,9 +498,9 @@ function PostComposerCard({
           <p className="text-sm text-[var(--accent)]">
             Join this public group before adding a post.
           </p>
-        ) : title.trim().length < 4 || body.trim().length < 12 ? (
+        ) : title.trim().length < 2 || body.trim().length < 3 ? (
           <p className="text-sm text-[var(--ink-soft)]">
-            Add at least 4 characters in the title and 12 characters in the post
+            Add at least 2 characters in the title and 3 characters in the post
             body before publishing.
           </p>
         ) : null}
