@@ -39,43 +39,95 @@ export class StorageService implements OnModuleInit {
   private readonly s3?: S3Client;
   private readonly localUploadRoot = join(tmpdir(), 'community-ai-uploads');
   private readonly minioEndpoint?: string;
+  private readonly storageProvider: 'aws' | 'minio' | 'none' = 'none';
   private storageMode: 's3' | 'local' = 'local';
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.bucket = this.configService.get<string>(
-      'MINIO_BUCKET',
-      'community-ai',
+    const explicitProvider = this.readConfig('STORAGE_PROVIDER')?.toLowerCase();
+    const awsBucket =
+      this.readConfig('AWS_S3_BUCKET') ??
+      this.readConfig('AWS_BUCKET_NAME') ??
+      this.readConfig('S3_BUCKET');
+    const awsRegion =
+      this.readConfig('AWS_REGION') ??
+      this.readConfig('AWS_DEFAULT_REGION') ??
+      'us-east-1';
+    const awsAccessKeyId = this.readConfig('AWS_ACCESS_KEY_ID');
+    const awsSecretAccessKey = this.readConfig('AWS_SECRET_ACCESS_KEY');
+    const canUseAws = Boolean(
+      awsBucket && awsAccessKeyId && awsSecretAccessKey,
     );
-    this.minioEndpoint =
-      this.configService.get<string>('MINIO_ENDPOINT')?.trim() || undefined;
+    const awsConfig = canUseAws
+      ? {
+          bucket: awsBucket!,
+          accessKeyId: awsAccessKeyId!,
+          secretAccessKey: awsSecretAccessKey!,
+          region: awsRegion,
+        }
+      : undefined;
 
-    if (this.minioEndpoint) {
+    this.minioEndpoint = this.readConfig('MINIO_ENDPOINT');
+    const minioAccessKey =
+      this.readConfig('MINIO_ACCESS_KEY') ?? 'minioadmin';
+    const minioSecretKey =
+      this.readConfig('MINIO_SECRET_KEY') ?? 'minioadmin';
+    const minioBucket =
+      this.readConfig('MINIO_BUCKET') ?? 'community-ai';
+    const minioPort = this.readConfig('MINIO_PORT') ?? '9000';
+    const minioProtocol = this.readBooleanConfig('MINIO_USE_SSL')
+      ? 'https'
+      : 'http';
+    const canUseMinio = Boolean(this.minioEndpoint);
+
+    if (explicitProvider === 'aws' || (!explicitProvider && canUseAws)) {
+      if (!awsConfig) {
+        this.bucket = awsBucket ?? minioBucket;
+        return;
+      }
+
+      this.bucket = awsConfig.bucket;
+      this.storageProvider = 'aws';
       this.s3 = new S3Client({
-        region: 'us-east-1',
-        endpoint: `http://${this.minioEndpoint}:${this.configService.get<string>('MINIO_PORT', '9000')}`,
+        region: awsConfig.region,
         credentials: {
-          accessKeyId: this.configService.get<string>(
-            'MINIO_ACCESS_KEY',
-            'minioadmin',
-          ),
-          secretAccessKey: this.configService.get<string>(
-            'MINIO_SECRET_KEY',
-            'minioadmin',
-          ),
+          accessKeyId: awsConfig.accessKeyId,
+          secretAccessKey: awsConfig.secretAccessKey,
+        },
+      });
+      return;
+    }
+
+    if (explicitProvider === 'minio' || (!explicitProvider && canUseMinio)) {
+      if (!canUseMinio) {
+        this.bucket = minioBucket;
+        return;
+      }
+
+      this.bucket = minioBucket;
+      this.storageProvider = 'minio';
+      this.s3 = new S3Client({
+        region: awsRegion,
+        endpoint: `${minioProtocol}://${this.minioEndpoint}:${minioPort}`,
+        credentials: {
+          accessKeyId: minioAccessKey,
+          secretAccessKey: minioSecretKey,
         },
         forcePathStyle: true,
       });
+      return;
     }
+
+    this.bucket = minioBucket;
   }
 
   async onModuleInit() {
     if (!this.s3) {
       await mkdir(this.localUploadRoot, { recursive: true });
       this.logger.warn(
-        'MinIO is not configured. Falling back to local attachment storage for this deployment.',
+        'Object storage is not configured. Falling back to local attachment storage for this deployment.',
       );
       return;
     }
@@ -83,17 +135,28 @@ export class StorageService implements OnModuleInit {
     try {
       await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
       this.storageMode = 's3';
+      this.logger.log(
+        `Using ${this.storageProvider.toUpperCase()} object storage bucket "${this.bucket}".`,
+      );
     } catch {
-      try {
-        await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
-        this.storageMode = 's3';
-      } catch (error) {
-        this.storageMode = 'local';
-        await mkdir(this.localUploadRoot, { recursive: true });
-        this.logger.warn(
-          `Bucket bootstrap skipped. Falling back to local attachment storage. ${String(error)}`,
-        );
+      if (this.storageProvider === 'minio') {
+        try {
+          await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
+          this.storageMode = 's3';
+          this.logger.log(`Created MinIO bucket "${this.bucket}".`);
+          return;
+        } catch (error) {
+          this.logger.warn(
+            `MinIO bucket bootstrap skipped. Falling back to local attachment storage. ${String(error)}`,
+          );
+        }
       }
+
+      this.storageMode = 'local';
+      await mkdir(this.localUploadRoot, { recursive: true });
+      this.logger.warn(
+        `Bucket check failed for ${this.storageProvider.toUpperCase()} bucket "${this.bucket}". Falling back to local attachment storage.`,
+      );
     }
   }
 
@@ -214,5 +277,14 @@ export class StorageService implements OnModuleInit {
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, buffer);
     return localKey;
+  }
+
+  private readConfig(key: string) {
+    return this.configService.get<string>(key)?.trim() || undefined;
+  }
+
+  private readBooleanConfig(key: string) {
+    const value = this.readConfig(key)?.toLowerCase();
+    return value === 'true' || value === '1' || value === 'yes';
   }
 }
